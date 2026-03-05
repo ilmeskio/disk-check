@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from disk_check.constants import HOME, THRESHOLD_WARN
 from disk_check.output import header, section, warn, info, color_size, human
 from disk_check.shell import du_mb, top_dirs
@@ -8,23 +10,33 @@ def section_library() -> tuple:
     lines = [header("LIBRARY — sottocartelle")]
     actions = []
 
-    for d in ["Application Support", "Caches", "Containers",
-              "Group Containers", "Logs", "Mail", "CloudStorage"]:
-        path = LIB / d
-        if not path.is_dir():
-            continue
-        mb = du_mb(path)
+    subdirs = ["Application Support", "Caches", "Containers",
+               "Group Containers", "Logs", "Mail", "CloudStorage"]
+    existing = [d for d in subdirs if (LIB / d).is_dir()]
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        size_futs = {d: ex.submit(du_mb, str(LIB / d)) for d in existing}
+        app_sup_fut = ex.submit(top_dirs, LIB / "Application Support")
+        caches_fut = ex.submit(top_dirs, LIB / "Caches")
+        containers_fut = ex.submit(top_dirs, LIB / "Containers")
+        sizes = {d: f.result() for d, f in size_futs.items()}
+        app_sup = app_sup_fut.result()
+        caches = caches_fut.result()
+        containers = containers_fut.result()
+
+    for d in existing:
+        mb = sizes.get(d, 0)
         if mb == 0:
             continue
         lines.append(color_size(mb, f"{d} — {human(mb)}"))
 
     lines.append(section("  Application Support — top 10"))
-    for mb, name in top_dirs(LIB / "Application Support"):
+    for mb, name in app_sup:
         lines.append(color_size(mb, f"{name} — {human(mb)}"))
 
     lines.append(section("  Caches — top 10"))
     big_caches = []
-    for mb, name in top_dirs(LIB / "Caches"):
+    for mb, name in caches:
         if mb >= THRESHOLD_WARN:
             lines.append(warn(f"{name} — {human(mb)} (eliminabile)"))
             big_caches.append((mb, name))
@@ -38,7 +50,7 @@ def section_library() -> tuple:
                         "open ~/Library/Caches  # elimina manualmente le cartelle"))
 
     lines.append(section("  Containers — top 10"))
-    for mb, name in top_dirs(LIB / "Containers"):
+    for mb, name in containers:
         lines.append(color_size(mb, f"{name} — {human(mb)}"))
 
     return "\n".join(lines), actions

@@ -20,6 +20,16 @@ def du_mb(path):
     return 0
 
 
+def du_batch(paths, max_workers=8):
+    """Returns {path: mb} for all paths, measured in parallel."""
+    if not paths:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {p: ex.submit(du_mb, p) for p in paths}
+    return {p: f.result() for p, f in futures.items()}
+
+
 def top_dirs(path, n=10):
     out = run(f'du -sm "{path}"/* 2>/dev/null | sort -rn | head -{n}')
     results = []
