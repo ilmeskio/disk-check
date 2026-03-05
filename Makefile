@@ -22,5 +22,8 @@ clean:
 	  disk_check/__pycache__/ disk_check/sections/__pycache__/ __pycache__/
 
 install: build
-	cp dist/disk-check /usr/local/bin/disk-check
-	chmod +x /usr/local/bin/disk-check
+	mkdir -p ~/.local/bin
+	cp dist/disk-check ~/.local/bin/disk-check
+	chmod +x ~/.local/bin/disk-check
+	@echo "Installed to ~/.local/bin/disk-check"
+	@echo "Make sure ~/.local/bin is in your PATH (add to ~/.zshrc: export PATH=\"\$$HOME/.local/bin:\$$PATH\")"

@@ -6,6 +6,7 @@ from disk_check.output import header, hr, ok, human
 from disk_check.shell import run
 from disk_check.spinner import MultiSpinner, NullSpinner
 from disk_check.json_output import emit_json
+from disk_check.update import cmd_version, cmd_update, check_for_update
 from disk_check.sections.overview import section_overview
 from disk_check.sections.home import section_home
 from disk_check.sections.library import section_library
@@ -18,6 +19,8 @@ usage: disk-check <command> [options]
 Commands:
   run [section…]           Scan the disk and display the report
   run --json [section…]    Structured JSON output (for LLM agents or scripts)
+  version                  Print the current version
+  update                   Update disk-check to the latest release
 
   Valid sections: overview, home, library, developer, docker
   (default: all sections)
@@ -38,6 +41,14 @@ def main():
 
     if not args or "--help" in args or "-h" in args:
         print(_HELP, end="")
+        return
+
+    if args[0] == "version":
+        cmd_version()
+        return
+
+    if args[0] == "update":
+        cmd_update()
         return
 
     if args[0] != "run":
@@ -72,7 +83,8 @@ def main():
 
     all_actions = []
     section_data = {}
-    with ThreadPoolExecutor(max_workers=len(active_sections)) as executor:
+    with ThreadPoolExecutor(max_workers=len(active_sections) + 1) as executor:
+        update_future = executor.submit(check_for_update)
         futures = {executor.submit(fn): key for key, _, fn in active_sections}
         for future in as_completed(futures):
             key = futures[future]
@@ -80,6 +92,7 @@ def main():
             all_actions.extend(actions)
             section_data[key] = data
             spinner.section_done(key, output)
+        section_data["_update"] = update_future.result()
 
     spinner.stop()
 
@@ -114,6 +127,9 @@ def main():
     print()
     print(hr())
     print("  Scan complete.")
+    new_tag = section_data.get("_update")
+    if new_tag:
+        print(f"  {Y}A new version is available: {new_tag} — run: disk-check update{RS}")
     print(hr())
     print()
 

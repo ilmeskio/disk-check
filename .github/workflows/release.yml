@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Patch version
+        run: |
+          TAG="${{ github.ref_name }}"
+          sed -i '' "s/__version__ = .*/__version__ = \"${TAG#v}\"/" disk_check/version.py
+
+      - name: Build binary
+        run: |
+          pip install pyinstaller==6.19.0
+          pyinstaller disk-check.spec
+
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/disk-check
+          generate_release_notes: true
