@@ -7,12 +7,20 @@ from disk_check.output import header, section, warn, ok, color_size, human
 from disk_check.shell import run, du_batch
 
 
-def _scan_patterns(DEV):
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(HOME))
+    except ValueError:
+        return str(path)
+
+
+def _scan_patterns(roots: list[Path]):
     """Single combined find + batch du for all known patterns."""
     names = [p for p, _, _ in PATTERNS]
     or_expr = " -o ".join(f'-name "{n}"' for n in names)
+    roots_str = " ".join(f'"{r}"' for r in roots)
     find_out = run(
-        f'find "{DEV}" -maxdepth 10 -type d \\( {or_expr} \\) -prune -print 2>/dev/null'
+        f'find {roots_str} -maxdepth 10 -type d \\( {or_expr} \\) -prune -print 2>/dev/null'
     )
     all_dirs = [d for d in find_out.splitlines() if d]
 
@@ -47,8 +55,7 @@ def _scan_patterns(DEV):
             if mb < 5:
                 continue
             total += mb
-            rel = str(Path(d).relative_to(HOME))
-            entries.append((mb, rel))
+            entries.append((mb, _rel(Path(d))))
         if not entries:
             continue
         entries.sort(reverse=True)
@@ -57,62 +64,66 @@ def _scan_patterns(DEV):
     return pattern_results
 
 
-def _scan_unclassified(DEV):
-    """du -d 6 traversal to find large unclassified dirs (single subprocess)."""
+def _scan_unclassified(roots: list[Path]):
+    """du -d 6 traversal to find large unclassified dirs across all roots."""
     known_pat = "|".join(re.escape(k) for k in KNOWN_PATTERNS)
     known_re = re.compile(r'/(' + known_pat + r')(/|$)')
 
-    out = run(f'du -md 6 "{DEV}" 2>/dev/null')
+    candidates: list[tuple[int, str, str]] = []  # (mb, rel, full_path)
+    for DEV in roots:
+        out = run(f'du -md 6 "{DEV}" 2>/dev/null')
+        dev_depth = len(DEV.parts)
+        for line in out.splitlines():
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            try:
+                mb = int(parts[0])
+            except ValueError:
+                continue
+            path = parts[1].strip()
 
-    dev_depth = len(Path(DEV).parts)
-    candidates = []
-    for line in out.splitlines():
-        parts = line.split(None, 1)
-        if len(parts) != 2:
-            continue
-        try:
-            mb = int(parts[0])
-        except ValueError:
-            continue
-        path = parts[1].strip()
-
-        # mindepth 2 relative to DEV
-        if len(Path(path).parts) - dev_depth < 2:
-            continue
-        # Skip paths containing known patterns
-        if known_re.search(path):
-            continue
-        if mb >= THRESHOLD_WARN:
-            rel = str(Path(path).relative_to(HOME))
-            candidates.append((mb, rel))
+            # mindepth 2 relative to DEV
+            if len(Path(path).parts) - dev_depth < 2:
+                continue
+            # Skip paths containing known patterns
+            if known_re.search(path):
+                continue
+            if mb >= THRESHOLD_WARN:
+                candidates.append((mb, _rel(Path(path)), path))
 
     candidates.sort(reverse=True)
 
     # Deduplicate nested dirs (keep outermost)
     shown_roots: list[str] = []
     deduped: list[tuple[int, str]] = []
-    for mb, rel in candidates:
-        full = str(HOME / rel)
-        if any(full.startswith(r + "/") for r in shown_roots):
+    for mb, rel, full_path in candidates:
+        if any(full_path.startswith(r + "/") for r in shown_roots):
             continue
-        shown_roots.append(full)
+        shown_roots.append(full_path)
         deduped.append((mb, rel))
 
     return deduped
 
 
 def section_developer() -> tuple:
-    DEV = HOME / "Developer"
+    from disk_check.config import get_dev_roots
+    roots = get_dev_roots()
+
     lines = [header("DEVELOPER — pattern noti")]
     actions = []
 
-    if not DEV.is_dir():
-        lines.append(warn("Cartella Developer non trovata"))
+    if not roots:
+        lines.append(warn("Nessuna cartella Developer trovata"))
         return "\n".join(lines), actions
 
+    if len(roots) > 1:
+        roots_display = ", ".join(_rel(r) for r in roots)
+        lines.append(ok(f"Root: {roots_display}"))
+
     with ThreadPoolExecutor(max_workers=2) as ex:
-        fut_patterns = ex.submit(_scan_patterns, DEV)
-        fut_unclassified = ex.submit(_scan_unclassified, DEV)
+        fut_patterns = ex.submit(_scan_patterns, roots)
+        fut_unclassified = ex.submit(_scan_unclassified, roots)
         pattern_results = fut_patterns.result()
         unclassified = fut_unclassified.result()
 
@@ -126,6 +137,7 @@ def section_developer() -> tuple:
             rec_tag = f"  {Y}↩{RS}" if rec else ""
             lines.append(color_size(total, f"[{pat}]  {count} {noun}  —  {human(total)}{rec_tag}"))
 
+        roots_find = " ".join(f'"{r}"' for r in roots)
         for pat, desc, rec, count, total, entries in sorted_results:
             noun = "directory" if count == 1 else "directories"
             lines.append(section(f"  [{pat}] {desc} — {count} {noun}, totale {human(total)}"))
@@ -135,7 +147,7 @@ def section_developer() -> tuple:
                 lines.append(f"             … e altri {len(entries) - 5}")
             if rec and total >= THRESHOLD_WARN:
                 actions.append((total, f"[{pat}] {desc} ({count} dirs)",
-                                f"find ~/Developer -name '{pat}' -type d | xargs rm -rf"))
+                                f"find {roots_find} -name '{pat}' -type d | xargs rm -rf"))
 
     lines.append(header(f"DIRECTORY GRANDI NON CLASSIFICATE  (>{THRESHOLD_WARN} MB)"))
 
