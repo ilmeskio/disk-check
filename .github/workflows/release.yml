@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.0.1)'
+        required: true
+        default: 'v0.0.1'
 
 jobs:
   build-and-release:
@@ -21,7 +27,7 @@ jobs:
 
       - name: Patch version
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           sed -i '' "s/__version__ = .*/__version__ = \"${TAG#v}\"/" disk_check/version.py
 
       - name: Build binary
