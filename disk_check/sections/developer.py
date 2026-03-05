@@ -110,11 +110,11 @@ def section_developer() -> tuple:
     from disk_check.config import get_dev_roots
     roots = get_dev_roots()
 
-    lines = [header("DEVELOPER — pattern noti")]
+    lines = [header("DEVELOPER — known patterns")]
     actions = []
 
     if not roots:
-        lines.append(warn("Nessuna cartella Developer trovata"))
+        lines.append(warn("No Developer folder found"))
         return "\n".join(lines), actions, {"patterns": [], "unclassified_large": []}
 
     if len(roots) > 1:
@@ -128,9 +128,9 @@ def section_developer() -> tuple:
         unclassified = fut_unclassified.result()
 
     if not pattern_results:
-        lines.append(ok("Nessun pattern trovato"))
+        lines.append(ok("No patterns found"))
     else:
-        lines.append(section("  Riepilogo per pattern"))
+        lines.append(section("  Summary by pattern"))
         sorted_results = sorted(pattern_results, key=lambda x: -x[4])
         for pat, desc, rec, count, total, _ in sorted_results:
             noun = "dir" if count == 1 else "dirs"
@@ -140,22 +140,22 @@ def section_developer() -> tuple:
         roots_find = " ".join(f'"{r}"' for r in roots)
         for pat, desc, rec, count, total, entries in sorted_results:
             noun = "directory" if count == 1 else "directories"
-            lines.append(section(f"  [{pat}] {desc} — {count} {noun}, totale {human(total)}"))
+            lines.append(section(f"  [{pat}] {desc} — {count} {noun}, total {human(total)}"))
             for mb, rel in entries[:5]:
                 lines.append(f"    {human(mb):>8}  {rel}")
             if len(entries) > 5:
-                lines.append(f"             … e altri {len(entries) - 5}")
+                lines.append(f"             … and {len(entries) - 5} more")
             if rec and total >= THRESHOLD_WARN:
                 actions.append((total, f"[{pat}] {desc} ({count} dirs)",
                                 f"find {roots_find} -name '{pat}' -type d | xargs rm -rf"))
 
-    lines.append(header(f"DIRECTORY GRANDI NON CLASSIFICATE  (>{THRESHOLD_WARN} MB)"))
+    lines.append(header(f"LARGE UNCLASSIFIED DIRECTORIES  (>{THRESHOLD_WARN} MB)"))
 
     if unclassified:
         for mb, rel in unclassified[:15]:
             lines.append(color_size(mb, f"{human(mb)}  {rel}"))
     else:
-        lines.append(ok("Nessuna directory grande non classificata trovata"))
+        lines.append(ok("No large unclassified directories found"))
 
     data = {
         "patterns": [

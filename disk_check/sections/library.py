@@ -7,7 +7,7 @@ from disk_check.shell import du_mb, top_dirs
 
 def section_library() -> tuple:
     LIB = HOME / "Library"
-    lines = [header("LIBRARY — sottocartelle")]
+    lines = [header("LIBRARY — subdirectories")]
     actions = []
 
     subdirs = ["Application Support", "Caches", "Containers",
@@ -38,7 +38,7 @@ def section_library() -> tuple:
     big_caches = []
     for mb, name in caches:
         if mb >= THRESHOLD_WARN:
-            lines.append(warn(f"{name} — {human(mb)} (eliminabile)"))
+            lines.append(warn(f"{name} — {human(mb)} (removable)"))
             big_caches.append((mb, name))
         else:
             lines.append(info(f"{name} — {human(mb)}"))
@@ -46,8 +46,8 @@ def section_library() -> tuple:
         total_cache = sum(m for m, _ in big_caches)
         names = ", ".join(n for _, n in big_caches[:3])
         actions.append((total_cache,
-                        f"Cache app ({names}…) — {human(total_cache)}",
-                        "open ~/Library/Caches  # elimina manualmente le cartelle"))
+                        f"App caches ({names}…) — {human(total_cache)}",
+                        "open ~/Library/Caches  # delete folders manually"))
 
     lines.append(section("  Containers — top 10"))
     for mb, name in containers:

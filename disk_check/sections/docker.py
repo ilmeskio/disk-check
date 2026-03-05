@@ -10,16 +10,16 @@ def section_docker() -> tuple:
     actions = []
 
     if not run("command -v docker"):
-        lines.append(warn("docker non trovato nel PATH"))
+        lines.append(warn("docker not found in PATH"))
         return "\n".join(lines), actions, {"available": False}
 
     test = subprocess.run("docker info", shell=True, capture_output=True)
     if test.returncode != 0:
-        lines.append(warn("Docker non in esecuzione — avvialo e rilancia lo script"))
+        lines.append(warn("Docker not running — start it and rerun"))
         return "\n".join(lines), actions, {"available": True, "running": False}
 
     df_out = run("docker system df")
-    lines.append(section("  Utilizzo complessivo"))
+    lines.append(section("  Overall usage"))
     vol_reclaimable_mb = 0
     for line in df_out.splitlines():
         lines.append(info(line))
@@ -46,7 +46,7 @@ def section_docker() -> tuple:
             img_name += ":latest"
         img_to_containers.setdefault(img_name, []).append((cname, cstatus))
 
-    lines.append(section("  Immagini"))
+    lines.append(section("  Images"))
     images_data = []
     fmt = "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedAt}}\t{{.Size}}"
     for line in run(f'docker images --format "{fmt}"').splitlines():
@@ -55,16 +55,16 @@ def section_docker() -> tuple:
             continue
         repo, tag, img_id, created_at, size = parts
         try:
-            created = created_at[:10] if int(created_at[:4]) > 1970 else "data n/d"
+            created = created_at[:10] if int(created_at[:4]) > 1970 else "date n/a"
         except ValueError:
             created = created_at[:10]
         key = f"{repo}:{tag}"
         containers = img_to_containers.get(key, [])
         if containers:
             cnames = ", ".join(n for n, _ in containers)
-            usage = f"  {G}[in uso: {cnames}]{RS}"
+            usage = f"  {G}[in use: {cnames}]{RS}"
         else:
-            usage = f"  {Y}[non usata ↩]{RS}"
+            usage = f"  {Y}[unused ↩]{RS}"
         if repo == "<none>":
             lines.append(warn(f"DANGLING  {size}  ({created}) — docker rmi {img_id}"))
         else:
@@ -79,7 +79,7 @@ def section_docker() -> tuple:
             "containers": [{"name": n, "status": s} for n, s in containers],
         })
 
-    lines.append(section("  Container"))
+    lines.append(section("  Containers"))
     containers_data = []
     stopped = []
     fmt = "{{.Names}}\t{{.Status}}\t{{.Image}}"
@@ -95,29 +95,29 @@ def section_docker() -> tuple:
             lines.append(ok(f"RUNNING  {name}  ({image})"))
         containers_data.append({"name": name, "status": status, "image": image})
     if stopped:
-        actions.append((0, f"Container fermi da rimuovere ({len(stopped)})",
+        actions.append((0, f"Stopped containers to remove ({len(stopped)})",
                         f"docker rm {' '.join(stopped)}"))
 
-    lines.append(section("  Volumi orfani (dangling)"))
+    lines.append(section("  Orphan volumes (dangling)"))
     orphans = [v for v in run("docker volume ls -qf dangling=true").splitlines() if v]
     if not orphans:
-        lines.append(ok("Nessun volume orfano"))
+        lines.append(ok("No orphan volumes"))
     else:
-        lines.append(crit(f"{len(orphans)} volumi orfani trovati — docker volume prune"))
+        lines.append(crit(f"{len(orphans)} orphan volumes found — docker volume prune"))
         for v in orphans:
             lines.append(info(v))
         actions.append((vol_reclaimable_mb or 500,
-                        f"Docker: {len(orphans)} volumi orfani ({human(vol_reclaimable_mb)} recuperabili)",
+                        f"Docker: {len(orphans)} orphan volumes ({human(vol_reclaimable_mb)} reclaimable)",
                         "docker volume prune"))
 
-    lines.append(section("  Volumi attivi"))
+    lines.append(section("  Active volumes"))
     orphan_set = set(orphans)
     active = [v for v in run("docker volume ls -q").splitlines() if v and v not in orphan_set]
     if active:
         for v in active:
             lines.append(info(v))
     else:
-        lines.append(info("Nessun volume attivo"))
+        lines.append(info("No active volumes"))
 
     data = {
         "available": True,

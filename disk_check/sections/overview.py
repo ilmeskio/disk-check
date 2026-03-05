@@ -4,7 +4,7 @@ from disk_check.shell import run
 
 
 def section_overview() -> tuple:
-    lines = [header("PANORAMICA DISCO")]
+    lines = [header("DISK OVERVIEW")]
     volumes = []
     out = run("df -h")
     for line in out.splitlines():

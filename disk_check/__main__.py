@@ -13,18 +13,16 @@ from disk_check.sections.developer import section_developer
 from disk_check.sections.docker import section_docker
 
 _HELP = """\
-uso: disk-check <comando> [opzioni]
+usage: disk-check <command> [options]
 
-Comandi:
-  run         Analizza il disco e mostra il report
+Commands:
+  run             Scan the disk and display the report
+  run --json      Structured JSON output (for LLM agents or scripts)
 
-Opzioni per 'run':
-  --json      Output JSON strutturato (per agenti LLM o script)
+General:
+  --help, -h      Show this message and exit
 
-Generali:
-  --help, -h  Mostra questo messaggio ed esce
-
-Sezioni analizzate: panoramica disco, home, Library, Developer, Docker.
+Sections analysed: disk overview, home, Library, Developer, Docker.
 """
 
 
@@ -36,14 +34,14 @@ def main():
         return
 
     if args[0] != "run":
-        print(f"Sottocomando sconosciuto: '{args[0]}'", file=sys.stderr)
+        print(f"Unknown subcommand: '{args[0]}'", file=sys.stderr)
         print(_HELP, end="")
         sys.exit(1)
 
     JSON_MODE = "--json" in args
 
     SECTIONS = [
-        ("overview",  "Panoramica disco…",          section_overview),
+        ("overview",  "Disk overview…",              section_overview),
         ("home",      "Home directory…",             section_home),
         ("library",   "Library…",                   section_library),
         ("developer", "Developer (scan pattern)…",  section_developer),
@@ -71,32 +69,32 @@ def main():
         return
 
     # ── Quick Wins ────────────────────────────────────────────────────────────
-    print(header("QUICK WINS — spazio recuperabile"))
+    print(header("QUICK WINS — recoverable space"))
 
     df_out = run("df -h /")
     for line in df_out.splitlines()[1:2]:
         parts = line.split()
         if len(parts) >= 5:
-            print(f"\n  Disco: {parts[2]} usati / {parts[1]} totali"
-                  f"  —  {B}{parts[3]} liberi{RS} ({parts[4]} usato)")
+            print(f"\n  Disk: {parts[2]} used / {parts[1]} total"
+                  f"  —  {B}{parts[3]} free{RS} ({parts[4]} used)")
 
     actions = sorted(all_actions, reverse=True)
 
     if actions:
         total_rec = sum(mb for mb, _, _ in actions if mb > 0)
         if total_rec > 0:
-            print(f"\n  Spazio recuperabile stimato: {B}{C}{human(total_rec)}{RS}\n")
+            print(f"\n  Estimated recoverable space: {B}{C}{human(total_rec)}{RS}\n")
         for mb, label, cmd in actions:
             size_str = f"  {Y}{human(mb)}{RS}" if mb > 0 else ""
             print(f"  {B}•{RS} {label}{size_str}")
             if cmd:
                 print(f"    {C}$ {cmd}{RS}")
     else:
-        print(ok("Nessuna azione suggerita — ottimo!"))
+        print(ok("No suggested actions — great!"))
 
     print()
     print(hr())
-    print("  Script completato.")
+    print("  Scan complete.")
     print(hr())
     print()
 
