@@ -13,4 +13,4 @@ def section_home() -> tuple:
     entries.sort(reverse=True)
     for mb, d in entries:
         lines.append(color_size(mb, f"{d} — {human(mb)}"))
-    return "\n".join(lines), []
+    return "\n".join(lines), [], {"directories": [{"name": d, "size_mb": mb} for mb, d in entries]}

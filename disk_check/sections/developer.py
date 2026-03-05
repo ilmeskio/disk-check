@@ -115,7 +115,7 @@ def section_developer() -> tuple:
 
     if not roots:
         lines.append(warn("Nessuna cartella Developer trovata"))
-        return "\n".join(lines), actions
+        return "\n".join(lines), actions, {"patterns": [], "unclassified_large": []}
 
     if len(roots) > 1:
         roots_display = ", ".join(_rel(r) for r in roots)
@@ -157,4 +157,18 @@ def section_developer() -> tuple:
     else:
         lines.append(ok("Nessuna directory grande non classificata trovata"))
 
-    return "\n".join(lines), actions
+    data = {
+        "patterns": [
+            {
+                "pattern": pat,
+                "description": desc,
+                "recoverable": rec,
+                "count": count,
+                "total_mb": total,
+                "entries": [{"path": rel, "size_mb": mb} for mb, rel in entries],
+            }
+            for pat, desc, rec, count, total, entries in pattern_results
+        ],
+        "unclassified_large": [{"path": rel, "size_mb": mb} for mb, rel in unclassified],
+    }
+    return "\n".join(lines), actions, data

@@ -53,4 +53,10 @@ def section_library() -> tuple:
     for mb, name in containers:
         lines.append(color_size(mb, f"{name} — {human(mb)}"))
 
-    return "\n".join(lines), actions
+    data = {
+        "subdirectories": [{"name": d, "size_mb": sizes.get(d, 0)} for d in existing if sizes.get(d, 0) > 0],
+        "application_support_top": [{"name": name, "size_mb": mb} for mb, name in app_sup],
+        "caches_top": [{"name": name, "size_mb": mb} for mb, name in caches],
+        "containers_top": [{"name": name, "size_mb": mb} for mb, name in containers],
+    }
+    return "\n".join(lines), actions, data

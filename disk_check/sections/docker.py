@@ -11,12 +11,12 @@ def section_docker() -> tuple:
 
     if not run("command -v docker"):
         lines.append(warn("docker non trovato nel PATH"))
-        return "\n".join(lines), actions
+        return "\n".join(lines), actions, {"available": False}
 
     test = subprocess.run("docker info", shell=True, capture_output=True)
     if test.returncode != 0:
         lines.append(warn("Docker non in esecuzione — avvialo e rilancia lo script"))
-        return "\n".join(lines), actions
+        return "\n".join(lines), actions, {"available": True, "running": False}
 
     df_out = run("docker system df")
     lines.append(section("  Utilizzo complessivo"))
@@ -47,6 +47,7 @@ def section_docker() -> tuple:
         img_to_containers.setdefault(img_name, []).append((cname, cstatus))
 
     lines.append(section("  Immagini"))
+    images_data = []
     fmt = "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedAt}}\t{{.Size}}"
     for line in run(f'docker images --format "{fmt}"').splitlines():
         parts = line.split("\t")
@@ -68,8 +69,18 @@ def section_docker() -> tuple:
             lines.append(warn(f"DANGLING  {size}  ({created}) — docker rmi {img_id}"))
         else:
             lines.append(info(f"{repo}:{tag}  {size}  ({created}){usage}"))
+        images_data.append({
+            "repository": repo,
+            "tag": tag,
+            "id": img_id,
+            "created": created,
+            "size": size,
+            "in_use": bool(containers),
+            "containers": [{"name": n, "status": s} for n, s in containers],
+        })
 
     lines.append(section("  Container"))
+    containers_data = []
     stopped = []
     fmt = "{{.Names}}\t{{.Status}}\t{{.Image}}"
     for line in run(f'docker ps -a --format "{fmt}"').splitlines():
@@ -82,6 +93,7 @@ def section_docker() -> tuple:
             stopped.append(name)
         else:
             lines.append(ok(f"RUNNING  {name}  ({image})"))
+        containers_data.append({"name": name, "status": status, "image": image})
     if stopped:
         actions.append((0, f"Container fermi da rimuovere ({len(stopped)})",
                         f"docker rm {' '.join(stopped)}"))
@@ -107,4 +119,12 @@ def section_docker() -> tuple:
     else:
         lines.append(info("Nessun volume attivo"))
 
-    return "\n".join(lines), actions
+    data = {
+        "available": True,
+        "running": True,
+        "images": images_data,
+        "containers": containers_data,
+        "dangling_volumes": orphans,
+        "active_volumes": active,
+    }
+    return "\n".join(lines), actions, data

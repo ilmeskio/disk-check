@@ -68,3 +68,9 @@ class MultiSpinner:
                 sys.stdout.write(f"\r\033[K\n")
             sys.stdout.write(f"\033[{self._n}A")
             sys.stdout.flush()
+
+
+class NullSpinner:
+    def start(self): pass
+    def section_done(self, key, output): pass
+    def stop(self): pass
