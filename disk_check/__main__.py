@@ -16,13 +16,20 @@ _HELP = """\
 usage: disk-check <command> [options]
 
 Commands:
-  run             Scan the disk and display the report
-  run --json      Structured JSON output (for LLM agents or scripts)
+  run [section…]           Scan the disk and display the report
+  run --json [section…]    Structured JSON output (for LLM agents or scripts)
+
+  Valid sections: overview, home, library, developer, docker
+  (default: all sections)
 
 General:
   --help, -h      Show this message and exit
 
-Sections analysed: disk overview, home, Library, Developer, Docker.
+Examples:
+  disk-check run
+  disk-check run developer
+  disk-check run home library
+  disk-check run --json overview docker
 """
 
 
@@ -48,13 +55,25 @@ def main():
         ("docker",    "Docker…",                    section_docker),
     ]
 
-    spinner = NullSpinner() if JSON_MODE else MultiSpinner([(key, label) for key, label, _ in SECTIONS])
+    run_args = [a for a in args[1:] if not a.startswith("--")]
+    if run_args:
+        VALID_SECTIONS = {key for key, _, _ in SECTIONS}
+        unknown = set(run_args) - VALID_SECTIONS
+        if unknown:
+            print(f"Unknown section(s): {', '.join(sorted(unknown))}", file=sys.stderr)
+            print(f"Valid sections: {', '.join(sorted(VALID_SECTIONS))}", file=sys.stderr)
+            sys.exit(1)
+        active_sections = [(k, label, fn) for k, label, fn in SECTIONS if k in run_args]
+    else:
+        active_sections = SECTIONS
+
+    spinner = NullSpinner() if JSON_MODE else MultiSpinner([(key, label) for key, label, _ in active_sections])
     spinner.start()
 
     all_actions = []
     section_data = {}
-    with ThreadPoolExecutor(max_workers=len(SECTIONS)) as executor:
-        futures = {executor.submit(fn): key for key, _, fn in SECTIONS}
+    with ThreadPoolExecutor(max_workers=len(active_sections)) as executor:
+        futures = {executor.submit(fn): key for key, _, fn in active_sections}
         for future in as_completed(futures):
             key = futures[future]
             output, actions, data = future.result()
