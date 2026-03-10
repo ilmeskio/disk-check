@@ -103,12 +103,13 @@ def section_docker() -> tuple:
     if not orphans:
         lines.append(ok("No orphan volumes"))
     else:
-        lines.append(crit(f"{len(orphans)} orphan volumes found — docker volume prune"))
+        rm_cmd = "docker volume rm " + " ".join(orphans)
+        lines.append(crit(f"{len(orphans)} orphan volumes found — {rm_cmd}"))
         for v in orphans:
             lines.append(info(v))
         actions.append((vol_reclaimable_mb or 500,
                         f"Docker: {len(orphans)} orphan volumes ({human(vol_reclaimable_mb)} reclaimable)",
-                        "docker volume prune"))
+                        rm_cmd))
 
     lines.append(section("  Active volumes"))
     orphan_set = set(orphans)
